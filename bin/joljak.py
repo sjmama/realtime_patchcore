@@ -27,8 +27,6 @@ img = np.transpose(img, (2,0,1))
 img=img/255.0
 img=torch.tensor(img).to(torch.float)
 img=img.unsqueeze(0)
-omin_scores=1.0
-omax_scores=0.0
 @click.group(chain=True)
 @click.argument("results_path", type=str)
 @click.option("--gpu", type=int, default=[0], multiple=True, show_default=True)
@@ -40,12 +38,8 @@ def main(**kwargs):
 flag=False
 @main.result_callback()
 def run(methods, results_path, gpu, seed, save_segmentation_images):
-    global omin_scores
-    global omax_scores
     methods = {key: item for (key, item) in methods}
-    print("=======================================\n",methods)
     os.makedirs(results_path, exist_ok=True)
-    
     device = patchcore.utils.set_torch_device(gpu)
     device_context = (
         torch.cuda.device("cuda:{}".format(device.index))
@@ -55,8 +49,8 @@ def run(methods, results_path, gpu, seed, save_segmentation_images):
 
     result_collect = []
     
-    dataloader_iter, n_dataloaders = methods["get_dataloaders_iter"]
-    dataloader_iter = dataloader_iter(seed)
+    # dataloader_iter, n_dataloaders = methods["get_dataloaders_iter"]
+    # dataloader_iter = dataloader_iter(seed)
     patchcore_iter, n_patchcores = methods["get_patchcore_iter"]
     patchcore_iter = patchcore_iter(device)
     #여기에 캡쳐 반복문 넣으면 될듯
@@ -67,6 +61,18 @@ def run(methods, results_path, gpu, seed, save_segmentation_images):
             print(flag)
             time.sleep(0.1)
         time.sleep(2.0)
+        # status, img = cam.read()###
+        # if not status:
+        #     time.sleep(0.1)
+        #     continue
+        # height, width = img.shape[:2]
+        # ratio = 320 / height
+        # resized_image = cv.resize(img, (int(width * ratio), 320))
+        # img = resized_image[:, (resized_image.shape[1]-320)//2:(resized_image.shape[1]+320)//2]
+        # img = np.transpose(img, (2,0,1))
+        # img=img/255.0
+        # img=torch.tensor(img).to(torch.float)
+        # img=img.unsqueeze(0)
         
         # for dataloader_count, dataloaders in enumerate(dataloader_iter):
         #     LOGGER.info(
@@ -84,7 +90,6 @@ def run(methods, results_path, gpu, seed, save_segmentation_images):
 
             torch.cuda.empty_cache()
             
-            
 
             aggregator = {"scores": [], "segmentations": []}
             for i, PatchCore in enumerate(PatchCore_list):
@@ -100,21 +105,13 @@ def run(methods, results_path, gpu, seed, save_segmentation_images):
                     img###
                     #dataloaders["testing"]##여기에 이미지 스트림에서 캡쳐한거 넣으면 될듯
                 )##labels_gt, masks_gt 이거 두개도  predic로 데이터로더 들어가면 나오는건데 이거 관련된 변수들 다 지움
+                print("score : ",scores)
                 aggregator["scores"].append(scores)
                 aggregator["segmentations"].append(segmentations)
             scores = np.array(aggregator["scores"])
-            xscores = np.mean(scores, axis=0)
-            
             min_scores = scores.min()
             max_scores = scores.max()
-            if min_scores<omin_scores:
-                omin_scores=min_scores
-            if max_scores>omax_scores:
-                omax_scores=min_scores
-            
-            print("정규화 안된거", scores)
-            scores = (scores - omin_scores) / (max_scores - min_scores)
-            print("정규화 된거", scores)
+            scores = (scores - min_scores) / (max_scores - min_scores)
             scores = np.mean(scores, axis=0)
             segmentations = np.array(aggregator["segmentations"])
             min_scores = (
@@ -247,7 +244,6 @@ def patch_core_loader(patch_core_paths, faiss_on_gpu, faiss_num_workers):
     return ("get_patchcore_iter", [get_patchcore_iter, len(patch_core_paths)])
 
 
-
 @main.command("dataset")
 @click.argument("name", type=str)
 @click.argument("data_path", type=click.Path(exists=True, file_okay=False))
@@ -273,16 +269,7 @@ def dataset(
                 split=dataset_library.DatasetSplit.TEST,
                 seed=seed,
             )
-            train_dataset = dataset_library.__dict__[dataset_info[1]](
-                data_path,
-                classname=subdataset,
-                resize=resize,
-                train_val_split=1,
-                imagesize=imagesize,
-                split=dataset_library.DatasetSplit.TRAIN,
-                seed=seed,
-                augment=augment,
-            )
+
             test_dataloader = torch.utils.data.DataLoader(
                 test_dataset,
                 batch_size=batch_size,
@@ -290,23 +277,12 @@ def dataset(
                 num_workers=num_workers,
                 pin_memory=True,
             )
-            train_dataloader = torch.utils.data.DataLoader(
-                train_dataset,
-                batch_size=batch_size,
-                shuffle=False,
-                num_workers=num_workers,
-                pin_memory=True,
-            )
+
             test_dataloader.name = name
-            train_dataloader.name = name
             if subdataset is not None:
                 test_dataloader.name += "_" + subdataset
-                train_dataloader.name += "_" + subdataset
 
-            dataloader_dict = {
-                "testing": test_dataloader,
-                "training": train_dataloader
-                }
+            dataloader_dict = {"testing": test_dataloader}
 
             yield dataloader_dict
 
@@ -323,8 +299,8 @@ def cap():
             continue
         height, width = iimg.shape[:2]
         ratio = 320 / height
-        resized_image = cv.resize(iimg, (366,366))
-        iimg = resized_image[(resized_image.shape[0]-320)//2:(resized_image.shape[0]+320)//2, (resized_image.shape[1]-320)//2:(resized_image.shape[1]+320)//2]
+        resized_image = cv.resize(iimg, (int(width * ratio), 320))
+        iimg = resized_image[:, (resized_image.shape[1]-320)//2:(resized_image.shape[1]+320)//2]
         iimg = np.transpose(iimg, (2,0,1))
         iimg=iimg/255.0
         iimg=torch.tensor(iimg).to(torch.float)
