@@ -17,7 +17,7 @@ import threading
 LOGGER = logging.getLogger(__name__)
 
 _DATASETS = {"mvtec": ["patchcore.datasets.mvtec", "MVTecDataset"]}
-cam=cv.VideoCapture("rtmp://ip/test_live/0000")
+cam=cv.VideoCapture("rtmp://43.200.254.27/test_live/0000")
 status, img = cam.read()
 height, width = img.shape[:2]
 ratio = 320 / height
