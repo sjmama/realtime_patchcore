@@ -68,7 +68,6 @@ def run(methods, results_path, gpu, seed, save_segmentation_images):
 
             torch.cuda.empty_cache()
             if dataloader_count < n_patchcores:
-                print(1)
                 PatchCore_list = next(patchcore_iter)
             aggregator = {"scores": [], "segmentations": []}
             for i, PatchCore in enumerate(PatchCore_list):
@@ -85,13 +84,10 @@ def run(methods, results_path, gpu, seed, save_segmentation_images):
                 aggregator["segmentations"].append(segmentations)
 
             scores = np.array(aggregator["scores"])
-            print("1:", scores)
             min_scores = scores.min(axis=-1).reshape(-1, 1)
             max_scores = scores.max(axis=-1).reshape(-1, 1)
             scores = (scores - min_scores) / (max_scores - min_scores)
             scores = np.mean(scores, axis=0)
-            
-            print("3:", scores)
             segmentations = np.array(aggregator["segmentations"])
             min_scores = (
                 segmentations.reshape(len(segmentations), -1)
